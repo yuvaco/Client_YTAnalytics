@@ -268,6 +268,9 @@ if file:
     st.subheader('User Retention Chart for All Videos')
     st.plotly_chart(fig_all_videos, use_container_width=True)
 
+    # Show the multiline chart for all videos
+    st.subheader('User Retention Chart Per Second Retention Rate for All Videos')
+
     # Display processed data in a scrollable table at the bottom
     st.subheader('Processed Data')
     st.dataframe(df, height=200)
