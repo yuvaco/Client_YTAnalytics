@@ -8,8 +8,8 @@ st.title("Video Stats Analysis")
 st.sidebar.title('Filters')
 file = st.sidebar.file_uploader('Upload Excel File (with multiple sheets):')
 
-def filter_first_30_seconds(retention_df):
-    filtered_df = retention_df.groupby('Video Title').apply(lambda x: x[x['Second'] <= 30]).reset_index(drop=True)
+def filter_first_60_seconds(retention_df):
+    filtered_df = retention_df.groupby('Video Title').apply(lambda x: x[x['Second'] <= 60]).reset_index(drop=True)
     return filtered_df
 
 def time_to_minutes(time_str):
@@ -282,7 +282,7 @@ def calculate_retention_rate_per_sec(filtered_dfs):
                 continue
 
             # Linear interpolation for each second between start_sec and end_sec
-            for sec in range(start_sec, min(end_sec, start_sec + 30) + 1):  # Limit to the first 30 seconds
+            for sec in range(start_sec, min(end_sec, start_sec + 60) + 1):  # Limit to the first 30 seconds
                 retention_rate = retention_start + (retention_end - retention_start) * (sec - start_sec) / (end_sec - start_sec)
                 retention_data.append({
                     'Video Title': video_title,
@@ -359,7 +359,8 @@ if file:
     viewer_type = st.sidebar.selectbox('Select Viewer Type:', options=['All', 'return', 'new'])
 
     # Show or hide decline and flat areas
-    dnf = st.sidebar.checkbox("Show Decline and Flats")
+    # dnf = st.sidebar.checkbox("Show Decline and Flats")
+    dnf=False
 
     # Get the dataframe for the selected video
     df = dfs[selected_video]
@@ -382,7 +383,7 @@ if file:
         filtered_dfs = {title: df[df['ViewerType'] == viewer_type] for title, df in filtered_dfs.items()}
 
     filtered_dfs_per_sec = calculate_retention_rate_per_sec(filtered_dfs)
-    filtered_dfs_per_sec = filter_first_30_seconds(filtered_dfs_per_sec)
+    filtered_dfs_per_sec = filter_first_60_seconds(filtered_dfs_per_sec)
     filtered_dfs_per_sec_dict = {title: filtered_dfs_per_sec[filtered_dfs_per_sec['Video Title'] == title] for title in filtered_video_titles}
 
     # st.subheader('filtered_dfs Data')
