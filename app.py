@@ -246,7 +246,7 @@ if file:
     if viewer_type != 'All':
         filtered_dfs = {title: df[df['ViewerType'] == viewer_type] for title, df in filtered_dfs.items()}
         
-    fig_all_videos = create_multiline_chart(filtered_dfs, 'Video position (%)', 'Retention Start (%)', 'User Retention Chart for All Videos', colors, dnf)
+    fig_all_videos = create_multiline_chart(filtered_dfs, 'Video position (%)', 'Retention Start (%)', 'User Retention Chart for All Videos by Video Position', colors, dnf)
 
     col1, col2 = st.columns((4, 2))
     with col1:
@@ -268,8 +268,6 @@ if file:
     st.subheader('User Retention Chart for All Videos')
     st.plotly_chart(fig_all_videos, use_container_width=True)
 
-    # Show the multiline chart for all videos
-    st.subheader('User Retention Chart Per Second Retention Rate for All Videos')
 
     # Display processed data in a scrollable table at the bottom
     st.subheader('Processed Data')
