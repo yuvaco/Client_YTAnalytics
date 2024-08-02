@@ -158,6 +158,37 @@ def create_stacked_bar_chart(dfs, x_column, y_column, title, colors):
     )
     return fig
 
+def calculate_retention_rate_per_sec(filtered_dfs):
+    """
+    Calculate retention rate per second for the first 30 seconds using linear interpolation.
+    Returns a new dataframe with 'Video Title', 'Second', and 'Retention Rate (%)'.
+    """
+    retention_data = []
+
+    for video_title, df in filtered_dfs.items():
+        df = df.sort_values(by='Video Start')
+        for i in range(len(df) - 1):
+            start_row = df.iloc[i]
+            end_row = df.iloc[i + 1]
+
+            start_sec = int(start_row['Video Start'])
+            end_sec = int(end_row['Video Start'])
+            retention_start = float(start_row['Retention Start (%)'])
+            retention_end = float(end_row['Retention Start (%)'])
+
+            # Linear interpolation for each second between start_sec and end_sec
+            for sec in range(start_sec, end_sec + 1):
+                retention_rate = retention_start + (retention_end - retention_start) * (sec - start_sec) / (end_sec - start_sec)
+                retention_data.append({
+                    'Video Title': video_title,
+                    'Second': sec,
+                    'Retention Rate (%)': retention_rate
+                })
+
+    # Create a DataFrame from the retention data
+    retention_df = pd.DataFrame(retention_data)
+    return retention_df
+
 
 if file:
     # Read all sheets into a dictionary of dataframes
@@ -245,8 +276,12 @@ if file:
     filtered_dfs = {title: dfs[title] for title in filtered_video_titles}
     if viewer_type != 'All':
         filtered_dfs = {title: df[df['ViewerType'] == viewer_type] for title, df in filtered_dfs.items()}
+
+    filtered_dfs_per_sec = calculate_retention_rate_per_sec(filtered_dfs)
         
     fig_all_videos = create_multiline_chart(filtered_dfs, 'Video position (%)', 'Retention Start (%)', 'User Retention Chart for All Videos by Video Position', colors, dnf)
+
+    fig_all_videos_per_second = create_multiline_chart(filtered_dfs_per_sec, 'Video duration (s)', 'Retention Start (%)', 'User Retention Chart for All Videos by Video Duration', colors, dnf)
 
     col1, col2 = st.columns((4, 2))
     with col1:
@@ -268,6 +303,7 @@ if file:
     st.subheader('User Retention Chart for All Videos')
     st.plotly_chart(fig_all_videos, use_container_width=True)
 
+    st.plotly_chart(fig_all_videos, use_container_width=True)
 
     # Display processed data in a scrollable table at the bottom
     st.subheader('Processed Data')
