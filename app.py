@@ -251,10 +251,97 @@ def create_stacked_bar_chart(dfs, x_column, y_column, title, colors):
     )
     return fig
 
+# def calculate_retention_rate_per_sec(filtered_dfs):
+#     retention_data = []
+
+    
+
+#     for video_title, df in filtered_dfs.items():
+
+
+#         df=df.head(10)
+
+#         print("Input data for calculate retention per sec",df)
+#         # Convert time columns to total seconds
+#         df['Video Start Sec'] = df['Video Start'].astype(str).apply(time_to_seconds)
+#         df['Video End Sec'] = df['Video End'].astype(str).apply(time_to_seconds)
+
+#         df['Video Start Sec'] = df['Video Start Sec'].astype(float)
+#         df['Video End Sec'] = df['Video End Sec'].astype(float)
+        
+#         # Filter out rows where 'Retention Start (%)' is not numeric
+#         df = df[pd.to_numeric(df['Retention Start (%)'], errors='coerce').notnull()]
+#         df['Retention Start (%)'] = df['Retention Start (%)'].astype(float)
+
+#         # Stop processing after the first occurrence where 'Video End Sec' >= 60
+#         if not df[df['Video End Sec'] >= 60].empty:
+#             df = df[df['Video End Sec'] <= 60]
+
+#         last_retention_rate = 100  # Initialize to 100% at the beginning
+        
+
+#         print("Debugging per second function, incoming df", df)
+        
+#         for i in range(len(df)):
+#             print("I",i)
+#             start_row = df.iloc[i]
+#             print("Start row",start_row)
+#             start_sec = int(start_row['Video Start Sec'])
+#             print("Start sec",start_sec)
+#             end_sec = int(start_row['Video End Sec'])
+#             print("End sec",end_sec)
+#             retention_end = float(start_row['Retention End (%)'])
+#             print("retention_end",retention_end)
+#             video_position_duration = end_sec - start_sec
+#             print("video_position_duration",video_position_duration)
+
+
+
+#             # Generate retention rates for each second in the segment
+#             for sec in range(start_sec, end_sec):
+
+#                 print(range(start_sec, end_sec))
+
+#                 # Calculate per-second drop
+                
+#                 if start_sec==0:
+#                     retention_diff=0
+#                 else:
+#                     retention_diff = last_retention_rate - retention_end
+#                     print("retention_diff",retention_diff)
+#                 per_sec_drop = retention_diff / video_position_duration if video_position_duration > 0 else 0
+#                 print("per_sec_drop",per_sec_drop)
+#                 retention_rate = last_retention_rate - per_sec_drop * (sec - start_sec)
+
+#                 retention_data.append({
+#                     'Video Title': video_title,
+#                     'Second': sec,
+#                     'Retention Start (%)': retention_rate,
+#                     'ViewerType': start_row['ViewerType']  # Include ViewerType
+
+#                 })
+
+                
+
+#             # Update last retention rate for next segment
+#             last_retention_rate = retention_end
+#             print("last_retention_rate = retention_end",last_retention_rate)
+
+#     # Create a DataFrame from the retention data
+#     retention_df = pd.DataFrame(retention_data)
+#     # print("Seeing what is the retention df after function",retention_df)
+#     retention_df = retention_df.sort_values(by=['Video Title', 'Second']).reset_index(drop=True)
+    
+#     return retention_df
+
 def calculate_retention_rate_per_sec(filtered_dfs):
+
     retention_data = []
 
     for video_title, df in filtered_dfs.items():
+        # Use the first 10 rows for simplicity
+        df = df.head(10)
+        
         # Convert time columns to total seconds
         df['Video Start Sec'] = df['Video Start'].astype(str).apply(time_to_seconds)
         df['Video End Sec'] = df['Video End'].astype(str).apply(time_to_seconds)
@@ -271,27 +358,40 @@ def calculate_retention_rate_per_sec(filtered_dfs):
             df = df[df['Video End Sec'] <= 60]
 
         last_retention_rate = 100  # Initialize to 100% at the beginning
-        
+        last_decline_rate = 0
+
+        # Loop running for each segment duration
         for i in range(len(df)):
             start_row = df.iloc[i]
             start_sec = int(start_row['Video Start Sec'])
             end_sec = int(start_row['Video End Sec'])
+            retention_start = last_retention_rate
             retention_end = float(start_row['Retention End (%)'])
             video_position_duration = end_sec - start_sec
-
-            # Calculate per-second drop
-            retention_diff = last_retention_rate - retention_end
-            per_sec_drop = retention_diff / video_position_duration if video_position_duration > 0 else 0
-
-            # Generate retention rates for each second in the segment
+            viewer_type_persec = start_row['ViewerType']
+            decline_rate_i = start_row['Decline %']
+            per_sec_change_i = decline_rate_i / video_position_duration if video_position_duration > 0 else 0
+            
+            # Loop running for seconds inside the segment duration to add data for each second
             for sec in range(start_sec, end_sec):
-                retention_rate = last_retention_rate - per_sec_drop * (sec - start_sec)
+                if sec == 0:
+                    decline_rate = 0
+                    per_sec_change = 0
+
+                else:
+                    decline_rate = decline_rate_i
+                    per_sec_change = per_sec_change_i
+
+                print("Start sec, End sec, segment, Video Position Duration", start_sec,end_sec,video_position_duration,decline_rate,i)
+                retention_rate = retention_start - (sec - start_sec) * per_sec_change
                 retention_data.append({
                     'Video Title': video_title,
                     'Second': sec,
-                    'Retention Rate (%)': retention_rate,
-                    'ViewerType': start_row['ViewerType']  # Include ViewerType
-
+                    'Video Start': start_row['Video Start'],
+                    'Retention Start (%)': retention_rate,
+                    'Decline %': decline_rate,
+                    'Per second change': per_sec_change,
+                    'ViewerType':viewer_type_persec
                 })
 
             # Update last retention rate for next segment
@@ -299,10 +399,11 @@ def calculate_retention_rate_per_sec(filtered_dfs):
 
     # Create a DataFrame from the retention data
     retention_df = pd.DataFrame(retention_data)
-    print("Seeing what is the retention df after function",retention_df)
-    retention_df = retention_df.sort_values(by=['Video Title', 'Second']).reset_index(drop=True)
+    retention_df = retention_df.sort_values(by=['Second']).reset_index(drop=True)
     
     return retention_df
+
+
 
 if file:
 
@@ -423,11 +524,11 @@ if file:
     # st.subheader('filtered_dfs per_sec Data')
     # st.dataframe(filtered_dfs_per_sec, height=200)
     # st.subheader('filtered_dfs per_sec dict Data')
-    st.write(filtered_dfs_per_sec_dict, height=10000)
-    
+
+        
         
     fig_all_videos = create_multiline_chart_all(filtered_dfs, 'Video position (%)', 'Retention Start (%)', 'User Retention Chart for All Videos by Video Position', colors,"Position",                               dnf)
-    fig_all_videos_per_second = create_multiline_chart_all(filtered_dfs_per_sec_dict, 'Second', 'Retention Rate (%)', 'User Retention Chart for All Videos by Video Duration', colors,"Duration", dnf)
+    fig_all_videos_per_second = create_multiline_chart_all(filtered_dfs_per_sec_dict, 'Second', 'Retention Start (%)', 'User Retention Chart for All Videos by Video Duration', colors,"Duration", dnf)
 
 
     col1, col2 = st.columns((4, 2))
@@ -455,6 +556,10 @@ if file:
     # Display processed data in a scrollable table at the bottom
     st.subheader('Processed Data')
     st.dataframe(df, height=200)
+
+    for video_title, df in filtered_dfs_per_sec_dict.items():
+        st.subheader(f"Per sec Retention Data for {video_title}")
+        st.dataframe(df, height=200)  # Adjust height as needed
 
 else:
     st.info("Upload the excel sheet first to continue")
