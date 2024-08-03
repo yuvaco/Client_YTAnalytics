@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import math
 
 st.set_page_config(layout='wide')
 st.title("Video Stats Analysis")
@@ -11,6 +12,9 @@ file = st.sidebar.file_uploader('Upload Excel File (with multiple sheets):')
 def filter_first_60_seconds(retention_df):
     filtered_df = retention_df.groupby('Video Title').apply(lambda x: x[x['Second'] <= 60]).reset_index(drop=True)
     return filtered_df
+
+def filter_positions(df):
+    return df[~df['Video position (%)'].isna() & (df['Video position (%)'] != '')]
 
 def time_to_minutes(time_str):
     """Convert time string HH:MM:SS or MM:SS to minutes."""
@@ -100,119 +104,74 @@ def process_data(df, sheet_name):
     # Concatenate return and new viewers data
     processed_df = pd.concat([return_viewers, new_viewers], ignore_index=True)
 
+    # Remove rows where 'Video position (%)' is NaN or 0
+    processed_df = processed_df[processed_df['Video position (%)'].notna()]
+
+    print("1.12: Printing New Concatenated df in process data", processed_df)
+
     # Add remaining columns from the original DataFrame
     remaining_columns = df.columns[12:]
     for col in remaining_columns:
         processed_df[col] = df[col].repeat(2).reset_index(drop=True)
 
     # Rename 'Return Decline' and 'New Decline' columns to 'Decline %'
-    if 'Return Decline (%)' in processed_df.columns:
-        processed_df.rename(columns={'Return Decline (%)': 'Decline %'}, inplace=True)
-    if 'New Decline' in processed_df.columns:
-        processed_df.rename(columns={'New Decline': 'Decline %'}, inplace=True)
+    processed_df.rename(columns={'Return Decline (%)': 'Decline %', 'New Decline': 'Decline %'}, inplace=True)
+    columns_to_drop = ['ChatGPT4', 'Content', 'Visuals', 'Audio','Lessons']
+    columns_existing = [col for col in columns_to_drop if col in processed_df.columns]
+    processed_df = processed_df.drop(columns=columns_existing)
+
 
     # Ensure all specified columns are present
-    required_columns = ['Return viewers', 'ChatGPT4', 'Content', 'Visuals', 'Audio', 'Lessons', 
-                        'Retention 10', 'Retention 30', 'Rank Retention 30', 'Dips', 
-                        'Flat line areas', 'Decline Areas', 'Decline %']
-    for col in required_columns:
-        if col not in processed_df.columns:
-            processed_df[col] = None
+    # required_columns = ['Return viewers', 'ChatGPT4', 'Content', 'Visuals', 'Audio', 'Lessons', 
+    #                     'Retention 10', 'Retention 30', 'Rank Retention 30', 'Dips', 
+    #                     'Flat line areas', 'Decline Areas', 'Decline %']
+    # for col in required_columns:
+    #     if col not in processed_df.columns:
+    #         processed_df[col] = None
 
     # Add duration column
-    processed_df['Total Duration'] = max(df['Video Start'].apply(time_to_minutes))
-
+    video_duration = df['Video Start'].dropna().iloc[-1]  # Assuming the last non-NaN value is the total duration
+    processed_df['Total Duration'] = time_to_minutes(video_duration)
     
     return processed_df
 
-# def create_multiline_chart(dfs, x_column, y_column, title, colors, dnf=False):
-#     fig = go.Figure()
-#     for i, (video_title, df) in enumerate(dfs.items()):
-#         fig.add_trace(go.Scatter(
-#             x=df[x_column],
-#             y=df[y_column],
-#             mode='lines',
-#             name=video_title,
-#             line=dict(color=colors[i % len(colors)])
-#         ))
-#         if dnf:
-#             decline_x = df[df['Decline Areas'] == 1][x_column]
-#             decline_y = df[df['Decline Areas'] == 1][y_column]
-#             fig.add_trace(go.Scatter(
-#                 x=decline_x,
-#                 y=decline_y,
-#                 mode='markers',
-#                 marker=dict(color='red', size=6),
-#                 showlegend=False
-#             ))
-#             flats_x = df[df['Flat line areas'] == 1][x_column]
-#             flats_y = df[df['Flat line areas'] == 1][y_column]
-#             fig.add_trace(go.Scatter(
-#                 x=flats_x,
-#                 y=flats_y,
-#                 mode='markers',
-#                 marker=dict(color='green', size=6),
-#                 showlegend=False
-#             ))
-#     fig.update_layout(
-#         title=title,
-#         xaxis_title=x_column,
-#         yaxis_title=y_column,
-#         legend=dict(orientation="h", y=-0.55),
-#         xaxis_rangeslider_visible=True,
-#         height=600
-#     )
-#     return fig
-
-def create_multiline_chart(dfs, x_column, y_column, title, colors, dnf=False):
+def create_multiline_chart_all(dfs, x_column, y_column, title, colors, type, dnf=False):
     fig = go.Figure()
-    
+
     for i, (video_title, df) in enumerate(dfs.items()):
+        print(f"Creating all video chart for : {video_title}")
+
         # Ensure the DataFrame contains the necessary columns
         if x_column not in df.columns or y_column not in df.columns:
             continue
 
-        fig.add_trace(go.Scatter(
-            x=df[x_column],
-            y=df[y_column],
-            mode='lines',
-            name=video_title,
-            line=dict(color=colors[i % len(colors)])
-        ))
-        
-        if dnf:
-            # Handle "Decline Areas", "Flat line areas", and "Dips" if they are present
-            if 'Decline Areas' in df.columns:
-                decline_x = df[df['Decline Areas'] == 1][x_column]
-                decline_y = df[df['Decline Areas'] == 1][y_column]
+        # Print the data to be plotted
+        print(f"All chart - Data to be plotted:\n{df[[x_column, y_column]]}")
+        print("Type is", type)
+
+        # Check if 'ViewerType' column is present
+        if 'ViewerType' in df.columns:
+            for viewer_type, viewer_color in [('return', 'blue'), ('new', 'green')]:
+                viewer_df = df[df['ViewerType'] == viewer_type]
+                if viewer_df.empty:
+                    continue
+                
                 fig.add_trace(go.Scatter(
-                    x=decline_x,
-                    y=decline_y,
-                    mode='markers',
-                    marker=dict(color='red', size=6),
-                    showlegend=False
+                    x=viewer_df[x_column],
+                    y=viewer_df[y_column],
+                    mode='lines',
+                    name=f"{video_title} - {viewer_type}",
+                    line=dict(color=colors[i % len(colors)])
                 ))
-            if 'Flat line areas' in df.columns:
-                flats_x = df[df['Flat line areas'] == 1][x_column]
-                flats_y = df[df['Flat line areas'] == 1][y_column]
-                fig.add_trace(go.Scatter(
-                    x=flats_x,
-                    y=flats_y,
-                    mode='markers',
-                    marker=dict(color='green', size=6),
-                    showlegend=False
-                ))
-            if 'Dips' in df.columns:
-                dips_x = df[df['Dips'] == 1][x_column]
-                dips_y = df[df['Dips'] == 1][y_column]
-                fig.add_trace(go.Scatter(
-                    x=dips_x,
-                    y=dips_y,
-                    mode='markers',
-                    marker=dict(color='blue', size=6),
-                    showlegend=False
-                ))
-    
+        else:
+            fig.add_trace(go.Scatter(
+                x=df[x_column],
+                y=df[y_column],
+                mode='lines',
+                name=video_title,
+                line=dict(color=colors[i % len(colors)])
+            ))
+
     fig.update_layout(
         title=title,
         xaxis_title=x_column,
@@ -223,6 +182,54 @@ def create_multiline_chart(dfs, x_column, y_column, title, colors, dnf=False):
     )
     return fig
 
+def create_multiline_chart(dfs, x_column, y_column, title, colors, dnf=False):
+
+    return_viewer_color = 'blue'
+    new_viewer_color = 'green'
+
+    fig = go.Figure()
+    
+    for i, (video_title, df) in enumerate(dfs.items()):
+        print(f"Creating single chart for video: {video_title}")
+        
+        # Ensure the DataFrame contains the necessary columns
+        if x_column not in df.columns or y_column not in df.columns:
+            continue
+
+        # Print the data to be plotted
+        if 'ViewerType' in df.columns:
+            print(f"Data to be plotted:\n{df[[x_column, y_column, 'ViewerType']].head(10)}")
+        else:
+            # In case of fig_all_videos_per_second
+            print(f"Data to be plotted:\n{df[[x_column, y_column,'Retention Rate (%)']].head(10)}")
+
+        # Plot lines for 'return' and 'new' viewers
+        if 'ViewerType' in df.columns:
+            for viewer_type, viewer_color in [('return', return_viewer_color), ('new', new_viewer_color)]:
+                viewer_df = df[df['ViewerType'] == viewer_type]
+                if viewer_df.empty:
+                    continue
+                
+                fig.add_trace(go.Scatter(
+                    x=viewer_df[x_column],
+                    y=viewer_df[y_column],
+                    mode='lines',
+                    name=f"{video_title} - {viewer_type}",
+                    line=dict(color=viewer_color)
+                ))
+        else:
+            continue
+
+    fig.update_layout(
+        title=title,
+        xaxis_title=x_column,
+        yaxis_title=y_column,
+        legend=dict(orientation="h", y=-0.55),
+        xaxis_rangeslider_visible=True,
+        height=600
+        
+    )
+    return fig
 
 def create_stacked_bar_chart(dfs, x_column, y_column, title, colors):
     fig = go.Figure()
@@ -245,74 +252,94 @@ def create_stacked_bar_chart(dfs, x_column, y_column, title, colors):
     return fig
 
 def calculate_retention_rate_per_sec(filtered_dfs):
-    """
-    Calculate retention rate per second for the first 30 seconds using linear interpolation.
-    Returns a new dataframe with 'Video Title', 'Second', and 'Retention Rate (%)'.
-    """
     retention_data = []
 
-    print("Df1", filtered_dfs)
-
     for video_title, df in filtered_dfs.items():
-        
-        # Convert time columns to total
-        df['Video Start Sec'] = df['Video Start'].apply(time_to_seconds)
-        df['Video End Sec'] = df['Video End'].apply(time_to_seconds)
-        
-        df = df.sort_values(by='Video Start Sec')
+        # Convert time columns to total seconds
+        df['Video Start Sec'] = df['Video Start'].astype(str).apply(time_to_seconds)
+        df['Video End Sec'] = df['Video End'].astype(str).apply(time_to_seconds)
 
-        print("Df 2", df)
-
+        df['Video Start Sec'] = df['Video Start Sec'].astype(float)
+        df['Video End Sec'] = df['Video End Sec'].astype(float)
+        
         # Filter out rows where 'Retention Start (%)' is not numeric
         df = df[pd.to_numeric(df['Retention Start (%)'], errors='coerce').notnull()]
         df['Retention Start (%)'] = df['Retention Start (%)'].astype(float)
 
-        for i in range(len(df) - 1):
+        # Stop processing after the first occurrence where 'Video End Sec' >= 60
+        if not df[df['Video End Sec'] >= 60].empty:
+            df = df[df['Video End Sec'] <= 60]
+
+        last_retention_rate = 100  # Initialize to 100% at the beginning
+        
+        for i in range(len(df)):
             start_row = df.iloc[i]
-            end_row = df.iloc[i + 1]
-
             start_sec = int(start_row['Video Start Sec'])
-            end_sec = int(end_row['Video End Sec'])
-            retention_start = float(start_row['Retention Start (%)'])
-            retention_end = float(end_row['Retention Start (%)'])
+            end_sec = int(start_row['Video End Sec'])
+            retention_end = float(start_row['Retention End (%)'])
+            video_position_duration = end_sec - start_sec
 
+            # Calculate per-second drop
+            retention_diff = last_retention_rate - retention_end
+            per_sec_drop = retention_diff / video_position_duration if video_position_duration > 0 else 0
 
-            # Ensure end_sec is greater than start_sec to avoid division by zero
-            if end_sec == start_sec:
-                continue
-
-            # Linear interpolation for each second between start_sec and end_sec
-            for sec in range(start_sec, min(end_sec, start_sec + 60) + 1):  # Limit to the first 30 seconds
-                retention_rate = retention_start + (retention_end - retention_start) * (sec - start_sec) / (end_sec - start_sec)
+            # Generate retention rates for each second in the segment
+            for sec in range(start_sec, end_sec):
+                retention_rate = last_retention_rate - per_sec_drop * (sec - start_sec)
                 retention_data.append({
                     'Video Title': video_title,
                     'Second': sec,
-                    'Retention Rate (%)': retention_rate
+                    'Retention Rate (%)': retention_rate,
+                    'ViewerType': start_row['ViewerType']  # Include ViewerType
+
                 })
+
+            # Update last retention rate for next segment
+            last_retention_rate = retention_end
 
     # Create a DataFrame from the retention data
     retention_df = pd.DataFrame(retention_data)
+    print("Seeing what is the retention df after function",retention_df)
+    retention_df = retention_df.sort_values(by=['Video Title', 'Second']).reset_index(drop=True)
+    
     return retention_df
 
 if file:
+
+    print("1. Debugging starting")
     # Read all sheets into a dictionary of dataframes
     sheets = pd.read_excel(file, sheet_name=None)
-
+    print("1. Reading excel files")
     # Process each sheet
     dfs = {sheet_name: process_data(df, sheet_name) for sheet_name, df in sheets.items()}
 
-    # Create a dictionary to store return viewers count for filtering
+    print("1.2 Printing excel files",dfs)
+
+    # # Create a dictionary to store return viewers count for filtering
     return_viewers_counts = {sheet_name: df['Return viewers'].sum() for sheet_name, df in dfs.items()}
+
+    # Dictionary to store the first unique value for 'Return viewers' for each sheet
+
+    return_viewers_counts = {sheet_name: df['Return viewers'].dropna().unique()[0] for sheet_name, df in dfs.items()}
+
     # Create a dictionary to store duration for filtering
     durations = {sheet_name: df['Total Duration'].max() for sheet_name, df in dfs.items()}
-
+    
+    print("1.3. Read df, duration,return viewers count",return_viewers_counts,durations)
     # Get video titles from the sheet names
     video_titles = list(dfs.keys())
+
+    print("1.4. Printing video title",video_titles)
+
+# Working on filters
+
+    print("2 Working on filters now",video_titles)
 
     # Filter by Return viewers
     all_return_viewers = [return_viewers_counts.get(title, 0) for title in video_titles]
     min_return_viewers = int(min(all_return_viewers, default=0))
     max_return_viewers = int(max(all_return_viewers, default=1000))  # Default to 1000 if max is 0
+    print("2.1 all_return_viewers,min_return_viewers,min_return_viewers",all_return_viewers,min_return_viewers,max_return_viewers)
 
     # Slider for Return viewers
     if min_return_viewers == max_return_viewers:
@@ -327,11 +354,13 @@ if file:
         value=(min_return_viewers, max_return_viewers)
     )
 
+    print("2.2 Selected return viewers",selected_min_views,selected_max_views)
+
     # Filter by Duration
     all_durations = [durations.get(title, 0) for title in video_titles]
     min_duration = int(min(all_durations, default=0))
-    max_duration = int(max(all_durations, default=1000))  # Default to 1000 if max is 0
-
+    max_duration = math.ceil(max(all_durations, default=1000)) # Default to 1000 if max is 0
+    print('All duration,min_duration,max_duration',all_durations,min_duration,max_duration)
     # Slider for Duration
     if min_duration == max_duration:
         # Ensure a valid slider range
@@ -364,10 +393,13 @@ if file:
 
     # Get the dataframe for the selected video
     df = dfs[selected_video]
+    print("3.1 Dataframe for selected video",df)
 
     # Filter by Viewer Type if not 'All'
     if viewer_type != 'All':
         df = df[df['ViewerType'] == viewer_type]
+
+    # ----------------------------------------------------------------------------------------------------------------  # Filter Panel Above
 
     # Create charts
     colors = ['#d32f2f', '#2196f3', '#e91e63', '#42a5f5', '#f06292', '#64b5f6', '#f48fb1', '#90caf9', '#ef9a9a', '#1f77b4']
@@ -391,11 +423,11 @@ if file:
     # st.subheader('filtered_dfs per_sec Data')
     # st.dataframe(filtered_dfs_per_sec, height=200)
     # st.subheader('filtered_dfs per_sec dict Data')
-    # st.write(filtered_dfs_per_sec_dict, height=200)
+    st.write(filtered_dfs_per_sec_dict, height=10000)
     
         
-    fig_all_videos = create_multiline_chart(filtered_dfs, 'Video position (%)', 'Retention Start (%)', 'User Retention Chart for All Videos by Video Position', colors, dnf)
-    fig_all_videos_per_second = create_multiline_chart(filtered_dfs_per_sec_dict, 'Second', 'Retention Rate (%)', 'User Retention Chart for All Videos by Video Duration', colors, dnf)
+    fig_all_videos = create_multiline_chart_all(filtered_dfs, 'Video position (%)', 'Retention Start (%)', 'User Retention Chart for All Videos by Video Position', colors,"Position",                               dnf)
+    fig_all_videos_per_second = create_multiline_chart_all(filtered_dfs_per_sec_dict, 'Second', 'Retention Rate (%)', 'User Retention Chart for All Videos by Video Duration', colors,"Duration", dnf)
 
 
     col1, col2 = st.columns((4, 2))
