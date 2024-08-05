@@ -251,75 +251,6 @@ def create_stacked_bar_chart(dfs, x_column, y_column, title, colors):
     )
     return fig
 
-# def calculate_retention_rate_per_sec(filtered_dfs):
-
-#     retention_data = []
-
-#     for video_title, df in filtered_dfs.items():
-#         # Use the first 10 rows for simplicity
-#         df = df.head(10)
-        
-#         # Convert time columns to total seconds
-#         df['Video Start Sec'] = df['Video Start'].astype(str).apply(time_to_seconds)
-#         df['Video End Sec'] = df['Video End'].astype(str).apply(time_to_seconds)
-
-#         df['Video Start Sec'] = df['Video Start Sec'].astype(float)
-#         df['Video End Sec'] = df['Video End Sec'].astype(float)
-        
-#         # Filter out rows where 'Retention Start (%)' is not numeric
-#         df = df[pd.to_numeric(df['Retention Start (%)'], errors='coerce').notnull()]
-#         df['Retention Start (%)'] = df['Retention Start (%)'].astype(float)
-
-#         # Stop processing after the first occurrence where 'Video End Sec' >= 60
-#         if not df[df['Video End Sec'] >= 60].empty:
-#             df = df[df['Video End Sec'] <= 60]
-
-#         last_retention_rate = 100  # Initialize to 100% at the beginning
-#         last_decline_rate = 0
-
-#         # Loop running for each segment duration
-#         for i in range(len(df)):
-#             start_row = df.iloc[i]
-#             start_sec = int(start_row['Video Start Sec'])
-#             end_sec = int(start_row['Video End Sec'])
-#             retention_start = last_retention_rate
-#             retention_end = float(start_row['Retention End (%)'])
-#             video_position_duration = end_sec - start_sec
-#             viewer_type_persec = start_row['ViewerType']
-#             decline_rate_i = start_row['Decline %']
-#             per_sec_change_i = decline_rate_i / video_position_duration if video_position_duration > 0 else 0
-            
-#             # Loop running for seconds inside the segment duration to add data for each second
-#             for sec in range(start_sec, end_sec):
-#                 if sec == 0:
-#                     decline_rate = 0
-#                     per_sec_change = 0
-
-#                 else:
-#                     decline_rate = decline_rate_i
-#                     per_sec_change = per_sec_change_i
-
-#                 print("Start sec, End sec, segment, Video Position Duration", start_sec,end_sec,video_position_duration,decline_rate,i)
-#                 retention_rate = retention_start - (sec - start_sec) * per_sec_change
-#                 retention_data.append({
-#                     'Video Title': video_title,
-#                     'Second': sec,
-#                     'Video Start': start_row['Video Start'],
-#                     'Retention Start (%)': retention_rate,
-#                     'Decline %': decline_rate,
-#                     'Per second change': per_sec_change,
-#                     'ViewerType':viewer_type_persec
-#                 })
-
-#             # Update last retention rate for next segment
-#             last_retention_rate = retention_end
-
-#     # Create a DataFrame from the retention data
-#     retention_df = pd.DataFrame(retention_data)
-#     retention_df = retention_df.sort_values(by=['Second']).reset_index(drop=True)
-    
-#     return retention_df
-
 def calculate_retention_rate_per_sec(filtered_dfs):
     retention_data = []
 
@@ -517,8 +448,9 @@ if file:
         
     fig_all_videos = create_multiline_chart_all(filtered_dfs, 'Video position (%)', 'Retention Start (%)', 'User Retention Chart for All Videos by Video Position', colors,"Position",                               dnf)
     fig_all_videos_per_second = create_multiline_chart_all(filtered_dfs_per_sec_dict, 'Second', 'Retention Start (%)', 'User Retention Chart for All Videos by Video Duration', colors,"Duration", dnf)
-
-
+    
+    # Printing the number of return viewers for the particular video
+ 
     col1, col2 = st.columns((4, 2))
     with col1:
         col11, col12 = st.columns((3, 1))
@@ -536,6 +468,32 @@ if file:
             st.plotly_chart(fig, use_container_width=True)
     
     # Show the multiline chart for all videos
+    # return_viewers_value = df['Return viewers'].iloc[0]
+    # new_viewers_value = df['New viewers'].iloc[0]
+    # st.subheader(f'Return Viewers: {return_viewers_value}')
+
+    return_viewers_value = df['Return viewers'].iloc[0]
+    new_viewers_value = df['New viewers'].iloc[0]
+
+    # Display the values beneath the chart with improved styling
+    st.markdown(f"""
+    <style>
+    .viewer-stats {{
+        font-size: 1.1em;
+        font-weight: bold;
+        color: #333;
+        margin-top: 20px;
+    }}
+    .viewer-stats .value {{
+        color: #007BFF;
+    }}
+    </style>
+    <div class="viewer-stats">
+        <p>Return Viewers: <span class="value">{return_viewers_value}</span></p>
+        <p>New Viewers: <span class="value">{new_viewers_value}</span></p>
+    </div>
+""", unsafe_allow_html=True)
+    
     st.subheader('User Retention Chart for All Videos')
     st.plotly_chart(fig_all_videos, use_container_width=True)
 
