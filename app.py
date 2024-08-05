@@ -341,6 +341,7 @@ if file:
     # Dictionary to store the first unique value for 'Return viewers' for each sheet
 
     return_viewers_counts = {sheet_name: df['Return viewers'].dropna().unique()[0] for sheet_name, df in dfs.items()}
+    new_viewers_counts = {sheet_name: df['New viewers'].dropna().unique()[0] for sheet_name, df in dfs.items()}
 
     # Create a dictionary to store duration for filtering
     durations = {sheet_name: df['Total Duration'].max() for sheet_name, df in dfs.items()}
@@ -373,8 +374,27 @@ if file:
         max_value=max_return_viewers,
         value=(min_return_viewers, max_return_viewers)
     )
+    
+    # Filter by New viewers
+    all_new_viewers = [new_viewers_counts.get(title, 0) for title in video_titles]
+    min_new_viewers = int(min(all_new_viewers, default=0))
+    max_new_viewers = int(max(all_new_viewers, default=1000))  # Default to 1000 if max is 0
+    print("2.1 all_return_viewers,min_return_viewers,min_return_viewers",all_new_viewers,min_new_viewers,max_new_viewers)
 
-    print("2.2 Selected return viewers",selected_min_views,selected_max_views)
+    # Slider for Return viewers
+    if min_new_viewers == max_new_viewers:
+        # Ensure a valid slider range
+        min_new_viewers = 0
+        max_new_viewers = 1000
+
+    selected_min_views, selected_max_views = st.sidebar.slider(
+        'Select Range of New Viewers:',
+        min_value=min_new_viewers,
+        max_value=max_new_viewers,
+        value=(min_new_viewers, max_new_viewers)
+    )
+
+    print("2.2 Selected new viewers",selected_min_views,selected_max_views)
 
     # Filter by Duration
     all_durations = [durations.get(title, 0) for title in video_titles]
@@ -472,11 +492,12 @@ if file:
     # new_viewers_value = df['New viewers'].iloc[0]
     # st.subheader(f'Return Viewers: {return_viewers_value}')
 
-    return_viewers_value = df['Return viewers'].iloc[0]
-    new_viewers_value = df['New viewers'].iloc[0]
+    try:
+        return_viewers_value = df['Return viewers'].iloc[0]
+        new_viewers_value = df['New viewers'].iloc[0]
 
     # Display the values beneath the chart with improved styling
-    st.markdown(f"""
+        st.markdown(f"""
     <style>
     .viewer-stats {{
         font-size: 1.1em;
@@ -494,6 +515,9 @@ if file:
     </div>
 """, unsafe_allow_html=True)
     
+    except:
+        None
+
     st.subheader('User Retention Chart for All Videos')
     st.plotly_chart(fig_all_videos, use_container_width=True)
 
