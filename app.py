@@ -387,7 +387,7 @@ if file:
         min_new_viewers = 0
         max_new_viewers = 1000
 
-    selected_min_views, selected_max_views = st.sidebar.slider(
+    selected_min_views_new, selected_max_views_new = st.sidebar.slider(
         'Select Range of New Viewers:',
         min_value=min_new_viewers,
         max_value=max_new_viewers,
@@ -418,7 +418,9 @@ if file:
     filtered_video_titles = [
         title for title in video_titles 
         if selected_min_views <= return_viewers_counts.get(title, 0) <= selected_max_views and
-           selected_min_duration <= durations.get(title, 0) <= selected_max_duration
+           selected_min_duration <= durations.get(title, 0) <= selected_max_duration and
+           selected_min_views_new <= new_viewers_counts.get(title, 0) <= selected_max_views_new
+
     ]
 
     # Video selection filter
